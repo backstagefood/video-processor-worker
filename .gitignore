@@ -29,7 +29,4 @@ go.work.sum
 
 /**/mocks
 
-# project workdirs
-/outputs/
-/temp/
-/uploads/
+*.iml
