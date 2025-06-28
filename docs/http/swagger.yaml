@@ -1,0 +1,138 @@
+basePath: /
+host: localhost:8080
+info:
+  contact:
+    email: support@swagger.io
+    name: API Support
+  description: API for video processing.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Video Processor Worker
+  version: "1.0"
+paths:
+  /health:
+    get:
+      consumes:
+      - application/json
+      description: Check the application health
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: health response
+          schema:
+            properties:
+              status:
+                type: string
+            type: object
+        "404":
+          description: not found error response
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "500":
+          description: generic error response
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      summary: Application health
+      tags:
+      - health
+  /info:
+    get:
+      consumes:
+      - application/json
+      description: Check the application info(name and version)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: info response
+          schema:
+            properties:
+              name:
+                type: string
+              version:
+                type: string
+            type: object
+        "500":
+          description: generic error response
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      summary: Application info
+      tags:
+      - info
+  /v1/download/{filename}:
+    get:
+      description: Download zip file with screenshots of the video
+      parameters:
+      - description: Filename
+        in: path
+        name: filename
+        required: true
+        type: string
+      produces:
+      - application/zip
+      responses:
+        "200":
+          description: ZIP file
+          schema:
+            type: file
+        "500":
+          description: generic error response
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      summary: Download zip file
+      tags:
+      - download
+  /v1/status:
+    get:
+      description: List all files
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success response
+          schema:
+            properties:
+              files:
+                items:
+                  properties:
+                    created_at:
+                      type: string
+                    filename:
+                      type: string
+                    processingResult:
+                      type: object
+                    size:
+                      type: number
+                    statusId:
+                      type: integer
+                  type: object
+                type: array
+              total:
+                type: integer
+            type: object
+        "500":
+          description: generic error response
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      summary: List all files
+      tags:
+      - status
+swagger: "2.0"

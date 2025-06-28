@@ -1,0 +1,8 @@
+.env
+.gitignore
+.idea
+.tool-versions
+build.yaml
+Dockerfile
+Makefile
+README.md
