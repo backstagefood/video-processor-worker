@@ -32,7 +32,7 @@ func (f *filesRepositoryImpl) CreateFile(file *domain.File) (*uuid.UUID, error) 
 		file.UserID,
 		file.VideoFilePath,
 		file.VideoFileSize,
-		file.StatusID,
+		file.FileStatus.ID,
 	).Scan(&file.ID)
 
 	if err != nil {
@@ -72,9 +72,10 @@ func (f *filesRepositoryImpl) UpdateFileStatus(id *uuid.UUID, fileProcessingResu
 
 func (f *filesRepositoryImpl) ListFilesByEmail(userEmail string) ([]*domain.File, error) {
 	query := `
-       SELECT f.id, f.user_id, f.video_file_path, f.video_file_size, f.zip_file_path, f.zip_file_size, f.status_id, f.processing_result, f.created_at, f.updated_at
-		FROM files f, users u 
+       SELECT f.id, f.user_id, f.video_file_path, f.video_file_size, f.zip_file_path, f.zip_file_size, s.id, s.status, f.processing_result, f.created_at, f.updated_at
+		FROM files f, users u, file_status s
 		WHERE f.user_id = u.id
+		  AND f.status_id = s.id
 		  AND u.email = $1;
 	`
 	stmt, err := f.dbClient.Prepare(query)
@@ -97,7 +98,8 @@ func (f *filesRepositoryImpl) ListFilesByEmail(userEmail string) ([]*domain.File
 			&file.VideoFileSize,
 			&file.ZipFilePath,
 			&file.ZipFileSize,
-			&file.StatusID,
+			&file.FileStatus.ID,
+			&file.FileStatus.Status,
 			&file.ProcessingResult,
 			&file.CreatedAt,
 			&file.UpdatedAt,

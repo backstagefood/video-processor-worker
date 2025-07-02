@@ -45,7 +45,8 @@ func (f *StatusHandler) HandleStatus(c *gin.Context) {
 		results = append(results, map[string]interface{}{
 			"filename":         file.GetZipFileName(),
 			"size":             file.ZipFileSize,
-			"statusId":         file.StatusID,
+			"statusId":         file.FileStatus.ID,
+			"status":           file.FileStatus.Status,
 			"processingResult": file.ProcessingResult,
 			"created_at":       file.CreatedAt.Format("2006-01-02 15:04:05"),
 		})

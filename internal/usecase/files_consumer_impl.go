@@ -64,16 +64,21 @@ func (f *fileConsumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim s
 
 		if fileId != nil {
 			go func() {
+				f.atualizaStatus(fileId, &domain.FileProcessingResult{FilePath: nil, FileSize: nil, Status: 2, Message: "em processamento"})
 				processingResult := f.processFile(context.Background(), filePayload.FilePath, filePayload.UserName)
-				err := f.filesRepository.UpdateFileStatus(fileId, processingResult)
-				if err != nil {
-					slog.Error("não foi possível atualizar o arquivo", "error", err)
-				}
+				f.atualizaStatus(fileId, processingResult)
 			}()
 		}
 
 	}
 	return nil
+}
+
+func (f *fileConsumer) atualizaStatus(fileId *uuid.UUID, processingResult *domain.FileProcessingResult) {
+	err := f.filesRepository.UpdateFileStatus(fileId, processingResult)
+	if err != nil {
+		slog.Error("não foi possível atualizar o status do arquivo", "error", err, "processingResulta", processingResult)
+	}
 }
 
 func (f *fileConsumer) insertFile(payload *domain.FilePayload) *uuid.UUID {
@@ -83,7 +88,7 @@ func (f *fileConsumer) insertFile(payload *domain.FilePayload) *uuid.UUID {
 		return nil
 	}
 	slog.Info("usuário encontrado", "user", user)
-	fileEntity := &domain.File{UserID: user.ID, VideoFilePath: payload.FilePath, VideoFileSize: payload.FileSize, StatusID: 1}
+	fileEntity := &domain.File{UserID: user.ID, VideoFilePath: payload.FilePath, VideoFileSize: payload.FileSize, FileStatus: domain.FileStatus{ID: 1, Status: ""}}
 	fileId, err := f.filesRepository.CreateFile(fileEntity)
 	if err != nil {
 		slog.Error("não foi possível gravar o arquivo na base de dados", "error", err)
@@ -94,8 +99,8 @@ func (f *fileConsumer) insertFile(payload *domain.FilePayload) *uuid.UUID {
 
 }
 
-func (v *fileConsumer) processFile(ctx context.Context, fileFullPath, userEmail string) *domain.FileProcessingResult {
-	videoData, _, err := v.bucketRepository.DownloadFile(ctx, fileFullPath)
+func (f *fileConsumer) processFile(ctx context.Context, fileFullPath, userEmail string) *domain.FileProcessingResult {
+	videoData, _, err := f.bucketRepository.DownloadFile(ctx, fileFullPath)
 	if err != nil {
 		return domain.NewFileProcessingResultWithError("não foi possível processar o arquivo de video - " + err.Error())
 	}
@@ -113,7 +118,7 @@ func (v *fileConsumer) processFile(ctx context.Context, fileFullPath, userEmail 
 		return domain.NewFileProcessingResultWithError("não foi possível criar o arquivo ZIP em memória - " + err.Error())
 	}
 	// gravar no bucket
-	zipFileSize, zipFilePath, err := v.createFile(ctx, arquivoZip, zipFilename, userEmail)
+	zipFileSize, zipFilePath, err := f.createFile(ctx, arquivoZip, zipFilename, userEmail)
 	if err != nil {
 		slog.Error("não foi possível gravar o arquivo zip no bucket", "fileName", fileName, "error", err)
 		return domain.NewFileProcessingResultWithError("não foi possível criar o arquivo ZIP no bucket - " + err.Error())
@@ -121,13 +126,13 @@ func (v *fileConsumer) processFile(ctx context.Context, fileFullPath, userEmail 
 	return &domain.FileProcessingResult{FilePath: &zipFilePath, FileSize: &zipFileSize, Status: 3, Message: fmt.Sprintf("%d frames extraídos", len(frames))}
 }
 
-func (v *fileConsumer) createFile(ctx context.Context, file multipart.File, fileName, userEmail string) (int64, string, error) {
+func (f *fileConsumer) createFile(ctx context.Context, file multipart.File, fileName, userEmail string) (int64, string, error) {
 	slog.Info("fileConsumer - create file", "userEmail", userEmail, "fileName", fileName)
 	// junta nome do usuario com caminho
 	path := filepath.Join(utils.SanitizeEmailForPath(userEmail), "zip_files")
 
 	// grava no bucket
-	fileFullPath, err := v.bucketRepository.CreateFile(ctx, path, fileName, file)
+	fileFullPath, err := f.bucketRepository.CreateFile(ctx, path, fileName, file)
 	if err != nil {
 		return 0, "", err
 	}

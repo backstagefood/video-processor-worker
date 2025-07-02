@@ -14,7 +14,7 @@ type File struct {
 	VideoFileSize    int64      `json:"video_file_size,omitempty"`
 	ZipFilePath      *string    `json:"zip_file_path,omitempty"`
 	ZipFileSize      *int64     `json:"zip_file_size,omitempty"`
-	StatusID         int16      `json:"status_id"`
+	FileStatus       FileStatus `json:"file_status"`
 	ProcessingResult *string    `json:"processing_result,omitempty"`
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        *time.Time `json:"updated_at,omitempty"`
