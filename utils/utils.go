@@ -92,81 +92,92 @@ func SanitizeEmailForPath(email string) string {
 }
 
 func ExtractFrames(videoData []byte, fps float64) ([]image.Image, error) {
-	// Create a context for timeout control
+	if len(videoData) == 0 {
+		return nil, fmt.Errorf("videoData está vazio")
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Create the FFmpeg command with proper error handling
 	cmd := exec.CommandContext(ctx,
 		"ffmpeg",
-		"-loglevel", "error", // Only show errors
-		"-i", "pipe:0", // Read from stdin
-		"-f", "image2pipe", // Output to pipe
-		"-vf", fmt.Sprintf("fps=%f", fps), // Frames per second
-		"-vcodec", "mjpeg", // Output JPEG frames
-		"-q:v", "2", // Quality factor
-		"-vsync", "0", // Prevent frame duplication/drop
-		"-frame_pts", "1", // Better frame timestamp handling
-		"pipe:1", // Write to stdout
+		"-loglevel", "error",
+		"-i", "pipe:0",
+		"-f", "image2pipe",
+		"-vf", fmt.Sprintf("fps=%f", fps),
+		"-vcodec", "mjpeg",
+		"-q:v", "2",
+		"-vsync", "0",
+		"-frame_pts", "1",
+		"pipe:1",
 	)
 
-	// Set up pipes with buffer
+	// Configuração de pipes (igual ao seu código original)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, fmt.Errorf("stdin pipe error: %w", err)
 	}
-
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("stdout pipe error: %w", err)
 	}
 
-	// Start the command
+	// Inicia o FFmpeg
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("ffmpeg start error: %w", err)
 	}
 
-	// Write video data to stdin in a goroutine
+	// Escreve os dados no stdin em uma goroutine
 	go func() {
 		defer stdin.Close()
 		if _, err := io.Copy(stdin, bytes.NewReader(videoData)); err != nil {
-			slog.Error("stdin", "error", err)
+			slog.Error("falha ao escrever no stdin", "error", err)
 		}
 	}()
 
+	// Decodifica os frames (igual ao seu código original)
 	var frames []image.Image
 	scanner := bufio.NewScanner(stdout)
-	scanner.Split(scanJPEGFrames) // Custom split function for JPEG frames
+	scanner.Split(scanJPEGFrames)
 
-	// Scan for JPEG frames
 	for scanner.Scan() {
-		frameData := scanner.Bytes()
-		img, err := jpeg.Decode(bytes.NewReader(frameData))
+		img, err := jpeg.Decode(bytes.NewReader(scanner.Bytes()))
 		if err != nil {
-			slog.Error("decodificar frame(pulando)", "error", err)
+			slog.Error("frame corrompido (pulando)", "error", err)
 			continue
 		}
 		frames = append(frames, img)
 	}
 
-	// Check for scanner errors
+	// Verifica erros do scanner
 	if err := scanner.Err(); err != nil {
-		slog.Error("scanner error", "error", err)
+		slog.Error("erro no scanner", "error", err)
 	}
 
-	// Wait for command to finish
-	if err := cmd.Wait(); err != nil {
-		// Ignore certain exit codes that FFmpeg may return
+	// Aguarda o término do FFmpeg e trata erros de forma mais robusta
+	err = cmd.Wait()
+	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			if exitErr.ExitCode() != 1 && exitErr.ExitCode() != 183 {
-				return frames, fmt.Errorf("ffmpeg terminou com código %d: %w",
-					exitErr.ExitCode(), err)
+			switch exitErr.ExitCode() {
+			case 1:
+				// Código 1 pode ser crítico (ex.: vídeo inválido)
+				if len(frames) == 0 {
+					return nil, fmt.Errorf("ffmpeg falhou (código 1): vídeo inválido ou sem frames")
+				}
+				slog.Warn("ffmpeg concluiu com avisos (código 1), mas alguns frames foram extraídos")
+			case 183:
+				// Código 183 pode ocorrer em vídeos com problemas de timestamp
+				slog.Warn("ffmpeg detectou problemas de timestamp (código 183)")
+			default:
+				return frames, fmt.Errorf("ffmpeg falhou com código %d: %w", exitErr.ExitCode(), err)
 			}
-			// Consider exit code 1 and 183 as non-fatal
-			slog.Error("ffmpeg terminou com erro", "error", exitErr.ExitCode())
 		} else {
-			return frames, fmt.Errorf("ffmpeg aguarando erro: %w", err)
+			return frames, fmt.Errorf("erro ao aguardar ffmpeg: %w", err)
 		}
+	}
+
+	if len(frames) == 0 {
+		return nil, fmt.Errorf("nenhum frame foi extraído (vídeo inválido ou vazio?)")
 	}
 
 	return frames, nil
