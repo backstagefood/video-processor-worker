@@ -9,7 +9,7 @@ import (
 	"image"
 	"image/jpeg"
 	"io"
-	"log"
+	"log/slog"
 	"mime/multipart"
 	"os"
 	"os/exec"
@@ -130,7 +130,7 @@ func ExtractFrames(videoData []byte, fps float64) ([]image.Image, error) {
 	go func() {
 		defer stdin.Close()
 		if _, err := io.Copy(stdin, bytes.NewReader(videoData)); err != nil {
-			log.Printf("stdin write error: %v", err)
+			slog.Error("stdin", "error", err)
 		}
 	}()
 
@@ -143,7 +143,7 @@ func ExtractFrames(videoData []byte, fps float64) ([]image.Image, error) {
 		frameData := scanner.Bytes()
 		img, err := jpeg.Decode(bytes.NewReader(frameData))
 		if err != nil {
-			log.Printf("frame decode error (skipping): %v", err)
+			slog.Error("decodificar frame(pulando)", "error", err)
 			continue
 		}
 		frames = append(frames, img)
@@ -151,7 +151,7 @@ func ExtractFrames(videoData []byte, fps float64) ([]image.Image, error) {
 
 	// Check for scanner errors
 	if err := scanner.Err(); err != nil {
-		log.Printf("scanner error: %v", err)
+		slog.Error("scanner error", "error", err)
 	}
 
 	// Wait for command to finish
@@ -159,13 +159,13 @@ func ExtractFrames(videoData []byte, fps float64) ([]image.Image, error) {
 		// Ignore certain exit codes that FFmpeg may return
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			if exitErr.ExitCode() != 1 && exitErr.ExitCode() != 183 {
-				return frames, fmt.Errorf("ffmpeg exited with code %d: %w",
+				return frames, fmt.Errorf("ffmpeg terminou com código %d: %w",
 					exitErr.ExitCode(), err)
 			}
 			// Consider exit code 1 and 183 as non-fatal
-			log.Printf("ffmpeg exited with code %d (non-fatal)", exitErr.ExitCode())
+			slog.Error("ffmpeg terminou com erro", "error", exitErr.ExitCode())
 		} else {
-			return frames, fmt.Errorf("ffmpeg wait error: %w", err)
+			return frames, fmt.Errorf("ffmpeg aguarando erro: %w", err)
 		}
 	}
 

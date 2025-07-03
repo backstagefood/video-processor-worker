@@ -81,6 +81,8 @@ func (f *fileConsumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim s
 				defer func() {
 					<-sem // Libera o slot no semáforo quando terminar
 				}()
+				// Sleep para simular processamento demorado definido no parametro processingDelay em segundos
+				time.Sleep(time.Duration(processingDelay) * time.Second)
 
 				f.atualizaStatus(id, &domain.FileProcessingResult{
 					FilePath: nil,
@@ -88,9 +90,7 @@ func (f *fileConsumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim s
 					Status:   2,
 					Message:  "em processamento",
 				})
-				// Sleep para simular processamento demorado (10 segundos)
 
-				time.Sleep(time.Duration(processingDelay) * time.Second)
 				processingResult := f.processFile(context.Background(), payload.FilePath, payload.UserName)
 				f.atualizaStatus(id, processingResult)
 
@@ -111,7 +111,7 @@ func (f *fileConsumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim s
 func (f *fileConsumer) atualizaStatus(fileId *uuid.UUID, processingResult *domain.FileProcessingResult) {
 	err := f.filesRepository.UpdateFileStatus(fileId, processingResult)
 	if err != nil {
-		slog.Error("não foi possível atualizar o status do arquivo", "error", err, "processingResulta", processingResult)
+		slog.Error("não foi possível atualizar o status do arquivo", "error", err, "processingResult", processingResult)
 	}
 }
 
@@ -136,9 +136,13 @@ func (f *fileConsumer) insertFile(payload *domain.FilePayload) *uuid.UUID {
 func (f *fileConsumer) processFile(ctx context.Context, fileFullPath, userEmail string) *domain.FileProcessingResult {
 	videoData, _, err := f.bucketRepository.DownloadFile(ctx, fileFullPath)
 	if err != nil {
-		return domain.NewFileProcessingResultWithError("não foi possível processar o arquivo de video - " + err.Error())
+		return domain.NewFileProcessingResultWithError("não foi possível baixar o arquivo de video - " + err.Error())
 	}
+	startTime := time.Now()
 	frames, err := utils.ExtractFrames(videoData, 1.0)
+	duration := time.Since(startTime)
+	slog.Info("extração de frames concluída", "tempo total", duration)
+
 	if err != nil || len(frames) == 0 {
 		return domain.NewFileProcessingResultWithError("não foi possível processar o arquivo de video - " + err.Error())
 	}
