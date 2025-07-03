@@ -45,7 +45,12 @@ func (f *fileConsumer) Cleanup(session sarama.ConsumerGroupSession) error {
 
 func (f *fileConsumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	// Cria um semáforo com capacidade para 2 goroutines
-	sem := make(chan struct{}, 2) // processa 2 videos por vez
+	maxVideos := utils.GetEnvVarOrDefault("MAX_VIDEOS", 20)
+	processingDelay := utils.GetEnvVarOrDefault("PROCESSING_DELAY", 0)
+
+	slog.Info("consumer", "maxVideos", maxVideos, "processingDelay", processingDelay)
+
+	sem := make(chan struct{}, maxVideos) // processa 2 videos por vez
 
 	for message := range claim.Messages() {
 		// Espera até que haja espaço no semáforo
@@ -84,7 +89,8 @@ func (f *fileConsumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim s
 					Message:  "em processamento",
 				})
 				// Sleep para simular processamento demorado (10 segundos)
-				time.Sleep(10 * time.Second)
+
+				time.Sleep(time.Duration(processingDelay) * time.Second)
 				processingResult := f.processFile(context.Background(), payload.FilePath, payload.UserName)
 				f.atualizaStatus(id, processingResult)
 

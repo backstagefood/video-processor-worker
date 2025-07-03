@@ -2,7 +2,6 @@
 .gitignore
 .idea
 .tool-versions
-go.sum
 build.yaml
 Dockerfile
 Makefile
