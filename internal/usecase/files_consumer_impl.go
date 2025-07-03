@@ -15,6 +15,7 @@ import (
 	"log/slog"
 	"mime/multipart"
 	"path/filepath"
+	"time"
 )
 
 func NewFileConsumer(bucketConn *bucketconfig.ApplicationS3Bucket, dbClient *databaseconnection.ApplicationDatabase) sarama.ConsumerGroupHandler {
@@ -43,7 +44,13 @@ func (f *fileConsumer) Cleanup(session sarama.ConsumerGroupSession) error {
 }
 
 func (f *fileConsumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+	// Cria um semáforo com capacidade para 2 goroutines
+	sem := make(chan struct{}, 2) // processa 2 videos por vez
+
 	for message := range claim.Messages() {
+		// Espera até que haja espaço no semáforo
+		sem <- struct{}{}
+
 		slog.Info("recebendo nova mensagem",
 			slog.String("topic", message.Topic),
 			slog.String("key", string(message.Key)),
@@ -54,23 +61,44 @@ func (f *fileConsumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim s
 		if err := json.Unmarshal(message.Value, &filePayload); err != nil {
 			slog.Error("não foi possível receber a mensagem do topico kafka", slog.String("error", err.Error()))
 			session.MarkMessage(message, "")
+			<-sem // Libera o slot no semáforo em caso de erro
 			continue
 		}
 
 		slog.Info("video recebido com sucesso", "filePayload", filePayload)
 		session.MarkMessage(message, "")
-		// gravar arquivo
+
+		// Gravar arquivo
 		fileId := f.insertFile(&filePayload)
 
 		if fileId != nil {
-			go func() {
-				f.atualizaStatus(fileId, &domain.FileProcessingResult{FilePath: nil, FileSize: nil, Status: 2, Message: "em processamento"})
-				processingResult := f.processFile(context.Background(), filePayload.FilePath, filePayload.UserName)
-				f.atualizaStatus(fileId, processingResult)
-			}()
-		}
+			go func(msg *sarama.ConsumerMessage, id *uuid.UUID, payload domain.FilePayload) {
+				defer func() {
+					<-sem // Libera o slot no semáforo quando terminar
+				}()
 
+				f.atualizaStatus(id, &domain.FileProcessingResult{
+					FilePath: nil,
+					FileSize: nil,
+					Status:   2,
+					Message:  "em processamento",
+				})
+				// Sleep para simular processamento demorado (10 segundos)
+				time.Sleep(10 * time.Second)
+				processingResult := f.processFile(context.Background(), payload.FilePath, payload.UserName)
+				f.atualizaStatus(id, processingResult)
+
+			}(message, fileId, filePayload)
+		} else {
+			<-sem // Libera o slot se fileId for nil
+		}
 	}
+
+	// Espera todas as goroutines terminarem antes de retornar
+	for i := 0; i < cap(sem); i++ {
+		sem <- struct{}{}
+	}
+
 	return nil
 }
 
