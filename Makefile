@@ -21,8 +21,10 @@ exec:
 	@go run ${LD_FLAGS} cmd/app/main.go
 
 swagger:
-# install -> go install github.com/swaggo/swag/cmd/swag@latest
 	@swag init -g cmd/app/main.go -o docs/http
+
+swagger-install:
+	@go install github.com/swaggo/swag/cmd/swag@latest
 
 docker-build:
 	@docker build --network=host --build-arg VERSION=$(VERSION) --build-arg PROJECT_NAME=$(PROJECT_NAME) -t $(PROJECT_NAME):$(VERSION) .
@@ -30,4 +32,19 @@ docker-build:
 podman-build:
 	@podman build --network=host --build-arg VERSION=$(VERSION) --build-arg PROJECT_NAME=$(PROJECT_NAME) -t $(PROJECT_NAME):$(VERSION) .
 
-#  docker build --no-cache --build-arg VERSION=0.0.2 --build-arg PROJECT_NAME=video-processor-worker -t video-processor-worker:0.0.2 .
+mockery:
+	@mockery
+
+mockery-install:
+	@go install github.com/vektra/mockery/v3@v3.2.3
+
+mockery-ci: mockery-install mockery
+
+install-ci: swagger-install
+	@go mod download
+
+test:
+	@go test ./... -coverpkg=$(shell go list ./... | grep -v mocks | grep -v docs | grep -v adapter | grep -v cmd/app | tr '\n' ',') -coverprofile=coverage.out -covermode=count
+	@go tool cover -func=coverage.out
+
+test-ci: mockery-ci test
