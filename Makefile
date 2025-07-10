@@ -47,4 +47,5 @@ test:
 	@go test ./... -coverpkg=$(shell go list ./... | grep -v mocks | grep -v docs | grep -v adapter | grep -v cmd/app | tr '\n' ',') -coverprofile=coverage.out -covermode=count
 	@go tool cover -func=coverage.out
 
-test-ci: mockery-ci test
+# test-ci: mockery-ci test
+test-ci: test
