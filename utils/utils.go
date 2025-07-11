@@ -168,6 +168,7 @@ func ExtractFrames(videoData []byte, fps float64) ([]image.Image, error) {
 			case 183:
 				// Código 183 pode ocorrer em vídeos com problemas de timestamp
 				slog.Warn("ffmpeg detectou problemas de timestamp (código 183)")
+				return frames, fmt.Errorf("ffmpeg detectou problemas de timestamp(código 183)")
 			default:
 				return frames, fmt.Errorf("ffmpeg falhou com código %d: %w", exitErr.ExitCode(), err)
 			}

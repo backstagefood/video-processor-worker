@@ -16,7 +16,9 @@ FROM alpine
 ENV GIN_MODE=release
 
 # Instalar ffmpeg
-RUN apk add --no-cache ffmpeg
+#RUN apk add --no-cache ffmpeg
+RUN apk add --no-cache ffmpeg-libs ffmpeg
+
 
 # Criar diretório de trabalho
 WORKDIR /app

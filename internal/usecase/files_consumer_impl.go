@@ -144,6 +144,8 @@ func (f *fileConsumer) processFile(ctx context.Context, fileFullPath, userEmail 
 	slog.Info("extração de frames concluída", "tempo total", duration)
 
 	if err != nil || len(frames) == 0 {
+		body := "Infelizmente não foi possível processar seu arquivo de vídeo. \r\n" + err.Error()
+		utils.SendEmail(userEmail, "não foi possível processar seu arquivo de video", body)
 		return domain.NewFileProcessingResultWithError("não foi possível processar o arquivo de video - " + err.Error())
 	}
 	slog.Info(fmt.Sprintf("📸 extraídos %d frames\n", len(frames)))
